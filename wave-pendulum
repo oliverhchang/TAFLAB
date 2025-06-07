@@ -1,0 +1,48 @@
+#include <Wire.h>
+#include <Adafruit_INA219.h>
+
+const int voltagePin1 = A0;
+const int voltagePin2 = A1;
+
+const float Vref = 5.0;
+const float ADC_resolution = 1024.0;
+const float R1 = 22000.0;
+const float R2 = 4700.0;
+
+Adafruit_INA219 ina219;
+
+void setup() {
+  Serial.begin(9600);
+  delay(1000);
+
+  if (!ina219.begin()) {
+    Serial.println("Failed to find INA219 chip. Check wiring.");
+    while (1);
+  }
+
+  Serial.println("Time(s)\tCap_V(V)\tBoost_V(V)\tCurrent(mA)\tPower(mW)");
+}
+
+void loop() {
+  float t = millis() / 1000.0;
+
+  int raw1 = analogRead(voltagePin1);
+  int raw2 = analogRead(voltagePin2);
+
+  float v_at_pin1 = (raw1 * Vref) / ADC_resolution;
+  float v_at_pin2 = (raw2 * Vref) / ADC_resolution;
+
+  float voltage1 = v_at_pin1 * (R1 + R2) / R2;
+  float voltage2 = v_at_pin2 * (R1 + R2) / R2;
+
+  float current_mA = ina219.getCurrent_mA();
+  float power_mW = (current_mA / 1000.0) * voltage2 * 1000.0;
+
+  Serial.print(t, 2); Serial.print("\t");
+  Serial.print(voltage1, 2); Serial.print("\t\t");
+  Serial.print(voltage2, 2); Serial.print("\t\t");
+  Serial.print(current_mA, 1); Serial.print("\t\t");
+  Serial.println(power_mW, 1);
+
+  delay(500);
+}
