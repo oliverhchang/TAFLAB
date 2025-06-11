@@ -1,0 +1,163 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+import numpy as np
+
+# Specify the CSV file name - change this to match your file
+csv_filename = "WaveData2.csv"  # Change this to your desired file name
+
+try:
+    # Read the CSV data from file
+    df = pd.read_csv(csv_filename)
+    print(f"Successfully loaded data from {csv_filename}")
+except FileNotFoundError:
+    print(f"Error: Could not find {csv_filename} in the project folder")
+    print("Please make sure the file exists and the filename is correct")
+    exit()
+except Exception as e:
+    print(f"Error reading CSV file: {e}")
+    exit()
+
+# Clean column names (remove units from headers for easier access)
+df.columns = ['Time', 'Cap_V', 'Boost_V', 'Current', 'Power', 'RPM', 'Avg_RPM']
+
+# Filter out data points where RPM is 0 for meaningful analysis
+df_active = df[df['RPM'] > 0].copy()
+
+# Calculate power efficiency (Power per unit current)
+df_active['Power_Efficiency'] = df_active['Power'] / df_active['Current']
+# Handle division by zero or very small currents
+df_active['Power_Efficiency'] = df_active['Power_Efficiency'].replace([np.inf, -np.inf], np.nan)
+
+# Create a comprehensive visualization with 3x2 layout
+fig, ((ax1, ax2), (ax3, ax4), (ax5, ax6)) = plt.subplots(3, 2, figsize=(15, 18))
+
+# 1. Current vs RPM
+scatter1 = ax1.scatter(df_active['RPM'], df_active['Current'],
+                      c=df_active['Time'], cmap='viridis', alpha=0.7, s=50)
+ax1.set_xlabel('RPM')
+ax1.set_ylabel('Current (mA)')
+ax1.set_title('Current vs RPM')
+ax1.grid(True, alpha=0.3)
+cbar1 = plt.colorbar(scatter1, ax=ax1)
+cbar1.set_label('Time (s)')
+
+# 2. Voltage vs RPM (both Cap_V and Boost_V)
+ax2.scatter(df_active['RPM'], df_active['Cap_V'],
+           alpha=0.7, label='Capacitor Voltage', color='blue', s=50)
+ax2.scatter(df_active['RPM'], df_active['Boost_V'],
+           alpha=0.7, label='Boost Voltage', color='red', s=50)
+ax2.set_xlabel('RPM')
+ax2.set_ylabel('Voltage (V)')
+ax2.set_title('Voltage vs RPM')
+ax2.legend()
+ax2.grid(True, alpha=0.3)
+
+# 3. Power vs RPM
+scatter3 = ax3.scatter(df_active['RPM'], df_active['Power'],
+                      c=df_active['Time'], cmap='plasma', alpha=0.7, s=50)
+ax3.set_xlabel('RPM')
+ax3.set_ylabel('Power (mW)')
+ax3.set_title('Power vs RPM')
+ax3.grid(True, alpha=0.3)
+cbar3 = plt.colorbar(scatter3, ax=ax3)
+cbar3.set_label('Time (s)')
+
+# 4. Combined plot: Current and Power vs RPM with dual y-axis
+ax4_twin = ax4.twinx()
+line1 = ax4.plot(df_active['RPM'], df_active['Current'], 'b-o', alpha=0.7,
+                 markersize=4, label='Current')
+line2 = ax4_twin.plot(df_active['RPM'], df_active['Power'], 'r-s', alpha=0.7,
+                      markersize=4, label='Power')
+ax4.set_xlabel('RPM')
+ax4.set_ylabel('Current (mA)', color='b')
+ax4_twin.set_ylabel('Power (mW)', color='r')
+ax4.set_title('Current and Power vs RPM')
+ax4.grid(True, alpha=0.3)
+ax4.tick_params(axis='y', labelcolor='b')
+ax4_twin.tick_params(axis='y', labelcolor='r')
+
+# 5. Power Efficiency vs RPM
+# Filter out NaN values for efficiency plot
+df_efficiency = df_active.dropna(subset=['Power_Efficiency'])
+if len(df_efficiency) > 0:
+    scatter5 = ax5.scatter(df_efficiency['RPM'], df_efficiency['Power_Efficiency'],
+                          c=df_efficiency['Time'], cmap='coolwarm', alpha=0.7, s=50)
+    ax5.set_xlabel('RPM')
+    ax5.set_ylabel('Power Efficiency (mW/mA)')
+    ax5.set_title('Power Efficiency vs RPM')
+    ax5.grid(True, alpha=0.3)
+    cbar5 = plt.colorbar(scatter5, ax=ax5)
+    cbar5.set_label('Time (s)')
+else:
+    ax5.text(0.5, 0.5, 'No valid efficiency data', ha='center', va='center', transform=ax5.transAxes)
+    ax5.set_title('Power Efficiency vs RPM (No Data)')
+
+# 6. Voltage Efficiency vs RPM (Power per unit voltage)
+df_active['Voltage_Efficiency_Cap'] = df_active['Power'] / df_active['Cap_V']
+df_active['Voltage_Efficiency_Boost'] = df_active['Power'] / df_active['Boost_V']
+# Handle division by zero
+df_active['Voltage_Efficiency_Cap'] = df_active['Voltage_Efficiency_Cap'].replace([np.inf, -np.inf], np.nan)
+df_active['Voltage_Efficiency_Boost'] = df_active['Voltage_Efficiency_Boost'].replace([np.inf, -np.inf], np.nan)
+
+df_volt_eff = df_active.dropna(subset=['Voltage_Efficiency_Cap', 'Voltage_Efficiency_Boost'])
+if len(df_volt_eff) > 0:
+    ax6.scatter(df_volt_eff['RPM'], df_volt_eff['Voltage_Efficiency_Cap'],
+               alpha=0.7, label='Cap V Efficiency', color='blue', s=50)
+    ax6.scatter(df_volt_eff['RPM'], df_volt_eff['Voltage_Efficiency_Boost'],
+               alpha=0.7, label='Boost V Efficiency', color='red', s=50)
+    ax6.set_xlabel('RPM')
+    ax6.set_ylabel('Voltage Efficiency (mW/V)')
+    ax6.set_title('Voltage Efficiency vs RPM')
+    ax6.legend()
+    ax6.grid(True, alpha=0.3)
+else:
+    ax6.text(0.5, 0.5, 'No valid voltage efficiency data', ha='center', va='center', transform=ax6.transAxes)
+    ax6.set_title('Voltage Efficiency vs RPM (No Data)')
+
+# Add legend for the combined plot
+lines = line1 + line2
+labels = [l.get_label() for l in lines]
+ax4.legend(lines, labels, loc='upper left')
+
+plt.tight_layout()
+plt.show()
+
+# Print some basic statistics
+print("Wave Data Analysis Summary:")
+print("=" * 40)
+print(f"Total data points: {len(df)}")
+print(f"Active data points (RPM > 0): {len(df_active)}")
+print(f"Time range: {df['Time'].min():.1f}s to {df['Time'].max():.1f}s")
+print(f"RPM range: {df_active['RPM'].min()} to {df_active['RPM'].max()}")
+print(f"Current range: {df_active['Current'].min():.1f} to {df_active['Current'].max():.1f} mA")
+print(f"Power range: {df_active['Power'].min():.1f} to {df_active['Power'].max():.1f} mW")
+print(f"Capacitor voltage range: {df_active['Cap_V'].min():.2f} to {df_active['Cap_V'].max():.2f} V")
+print(f"Boost voltage range: {df_active['Boost_V'].min():.2f} to {df_active['Boost_V'].max():.2f} V")
+
+# Power efficiency statistics
+if len(df_efficiency) > 0:
+    print(f"Power efficiency range: {df_efficiency['Power_Efficiency'].min():.2f} to {df_efficiency['Power_Efficiency'].max():.2f} mW/mA")
+    print(f"Average power efficiency: {df_efficiency['Power_Efficiency'].mean():.2f} mW/mA")
+
+# Calculate correlations
+print("\nCorrelations with RPM:")
+print("=" * 20)
+print(f"Current vs RPM: {df_active['Current'].corr(df_active['RPM']):.3f}")
+print(f"Power vs RPM: {df_active['Power'].corr(df_active['RPM']):.3f}")
+print(f"Cap Voltage vs RPM: {df_active['Cap_V'].corr(df_active['RPM']):.3f}")
+print(f"Boost Voltage vs RPM: {df_active['Boost_V'].corr(df_active['RPM']):.3f}")
+
+# Efficiency correlations
+if len(df_efficiency) > 0:
+    print(f"Power Efficiency vs RPM: {df_efficiency['Power_Efficiency'].corr(df_efficiency['RPM']):.3f}")
+
+# Find optimal efficiency points
+if len(df_efficiency) > 0:
+    max_eff_idx = df_efficiency['Power_Efficiency'].idxmax()
+    print(f"\nOptimal Efficiency Point:")
+    print("=" * 25)
+    print(f"Time: {df_efficiency.loc[max_eff_idx, 'Time']:.1f}s")
+    print(f"RPM: {df_efficiency.loc[max_eff_idx, 'RPM']}")
+    print(f"Power: {df_efficiency.loc[max_eff_idx, 'Power']:.1f} mW")
+    print(f"Current: {df_efficiency.loc[max_eff_idx, 'Current']:.1f} mA")
+    print(f"Efficiency: {df_efficiency.loc[max_eff_idx, 'Power_Efficiency']:.2f} mW/mA")
