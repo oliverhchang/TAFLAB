@@ -1,69 +1,115 @@
-const int hallPin = 2;  // Connect S (signal) pin here
-volatile unsigned int pulseCount = 0;
+#include <Wire.h>
+#include <Adafruit_INA219.h>
 
-unsigned long lastMeasureTime = 0;
-const unsigned long interval = 100; // 100ms = 10 measurements per second
+// Power monitoring pins and constants
+const int voltagePin1 = A0;
+const int voltagePin2 = A1;
+const float Vref = 5.0;
+const float ADC_resolution = 1024.0;
+const float R1 = 22000.0;
+const float R2 = 4700.0;
+Adafruit_INA219 ina219;
 
-// Rolling average for smoother readings
-const int numReadings = 10;  // Average over last 10 readings (1 second)
-int readings[numReadings];   // Array to store readings
-int readIndex = 0;           // Current position in array
-int total = 0;               // Running total
-int averageRPM = 0;          // Averaged RPM
+// RPM monitoring
+const int hallPin = 2;
+volatile unsigned long lastPulseTime = 0;
+volatile unsigned long pulseInterval = 0;
+volatile bool newPulseReceived = false;
 
-// Variables for edge detection
+// RPM calculation variables
+float currentRPM = 0;
+const int numReadings = 5;
+float rpmReadings[numReadings];
+int readIndex = 0;
+float rpmTotal = 0;
+float averageRPM = 0;
+
+// Edge detection for Hall sensor
 volatile bool lastState = HIGH;
 volatile unsigned long lastStateChangeTime = 0;
-const unsigned long minPulseWidth = 5; // Reduced to 5ms for high RPM
+const unsigned long minPulseWidth = 5;
+
+// Timing variables
+unsigned long lastDataTime = 0;
+const unsigned long dataInterval = 500; // 500ms data collection interval
 
 void setup() {
-  Serial.begin(115200); // Higher baud rate for more data
-  pinMode(hallPin, INPUT);
+  Serial.begin(115200);
+  delay(1000);
   
-  // Initialize all readings to 0
-  for (int i = 0; i < numReadings; i++) {
-    readings[i] = 0;
+  // Initialize INA219
+  if (!ina219.begin()) {
+    Serial.println("Failed to find INA219 chip. Check wiring.");
+    while (1);
   }
   
-  // Use CHANGE to detect both rising and falling edges
+  // Initialize RPM monitoring
+  pinMode(hallPin, INPUT);
   attachInterrupt(digitalPinToInterrupt(hallPin), detectMagnet, CHANGE);
   
-  Serial.println("High-Frequency Hall Sensor RPM Monitor Started");
-  Serial.println("Measurement interval: 100ms | Rolling average: 10 samples");
-  Serial.println("Time(ms), Instant_RPM, Avg_RPM, Pulses");
+  // Initialize RPM readings array
+  for (int i = 0; i < numReadings; i++) {
+    rpmReadings[i] = 0;
+  }
+  
+  // Print header for data
+  Serial.println("Time(s)\tCap_V(V)\tBoost_V(V)\tCurrent(mA)\tPower(mW)\tRPM\tAvg_RPM");
 }
 
 void loop() {
   unsigned long now = millis();
-
-  if (now - lastMeasureTime >= interval) {
-    // Disable interrupts while reading volatile variable
-    noInterrupts();
-    unsigned int currentPulseCount = pulseCount;
-    pulseCount = 0; // Reset counter for next interval
-    interrupts();
+  
+  // Update RPM calculation if new pulse received
+  if (newPulseReceived && pulseInterval > 0) {
+    newPulseReceived = false;
     
-    // Calculate instantaneous RPM
-    // pulses in 100ms * 10 = pulses per second * 60 = pulses per minute
-    unsigned int instantRPM = currentPulseCount * 600;
+    // Calculate RPM from pulse interval
+    currentRPM = 60000.0 / pulseInterval;
     
     // Update rolling average
-    total = total - readings[readIndex];        // Remove oldest reading
-    readings[readIndex] = instantRPM;           // Add new reading
-    total = total + readings[readIndex];        // Add new reading to total
-    readIndex = (readIndex + 1) % numReadings;  // Move to next position
-    averageRPM = total / numReadings;           // Calculate average
+    rpmTotal = rpmTotal - rpmReadings[readIndex];
+    rpmReadings[readIndex] = currentRPM;
+    rpmTotal = rpmTotal + rpmReadings[readIndex];
+    readIndex = (readIndex + 1) % numReadings;
+    averageRPM = rpmTotal / numReadings;
+  }
+  
+  // Reset RPM if no pulse for 2 seconds (stopped)
+  if (now - lastPulseTime > 2000) {
+    currentRPM = 0;
+    averageRPM = 0;
+    for (int i = 0; i < numReadings; i++) {
+      rpmReadings[i] = 0;
+    }
+    rpmTotal = 0;
+  }
+  
+  // Collect and output data every 500ms
+  if (now - lastDataTime >= dataInterval) {
+    float t = now / 1000.0;
     
-    // Output data in CSV format for easy analysis
-    Serial.print(now);
-    Serial.print(", ");
-    Serial.print(instantRPM);
-    Serial.print(", ");
-    Serial.print(averageRPM);
-    Serial.print(", ");
-    Serial.println(currentPulseCount);
-
-    lastMeasureTime = now;
+    // Read voltage measurements
+    int raw1 = analogRead(voltagePin1);
+    int raw2 = analogRead(voltagePin2);
+    float v_at_pin1 = (raw1 * Vref) / ADC_resolution;
+    float v_at_pin2 = (raw2 * Vref) / ADC_resolution;
+    float voltage1 = v_at_pin1 * (R1 + R2) / R2;
+    float voltage2 = v_at_pin2 * (R1 + R2) / R2;
+    
+    // Read current and calculate power
+    float current_mA = ina219.getCurrent_mA();
+    float power_mW = (current_mA / 1000.0) * voltage2 * 1000.0;
+    
+    // Output all data in tab-separated format
+    Serial.print(t, 2); Serial.print("\t");
+    Serial.print(voltage1, 2); Serial.print("\t\t");
+    Serial.print(voltage2, 2); Serial.print("\t\t");
+    Serial.print(current_mA, 1); Serial.print("\t\t");
+    Serial.print(power_mW, 1); Serial.print("\t\t");
+    Serial.print(currentRPM, 0); Serial.print("\t");
+    Serial.println(averageRPM, 0);
+    
+    lastDataTime = now;
   }
 }
 
@@ -71,14 +117,17 @@ void detectMagnet() {
   unsigned long currentTime = millis();
   bool currentState = digitalRead(hallPin);
   
-  // Debounce: ignore changes that happen too quickly
   if (currentTime - lastStateChangeTime < minPulseWidth) {
     return;
   }
   
-  // Count a pulse when sensor goes from HIGH to LOW (magnet detected)
   if (lastState == HIGH && currentState == LOW) {
-    pulseCount++;
+    // Calculate interval between pulses
+    if (lastPulseTime > 0) {
+      pulseInterval = currentTime - lastPulseTime;
+      newPulseReceived = true;
+    }
+    lastPulseTime = currentTime;
   }
   
   lastState = currentState;
