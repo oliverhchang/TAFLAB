@@ -1,160 +1,84 @@
-const int hallPin = 2;
-volatile unsigned long lastPulseTime = 0;
-volatile unsigned long pulseInterval = 0;
-volatile bool newPulseReceived = false;
+const int hallPin = 2;  // Connect S (signal) pin here
 volatile unsigned int pulseCount = 0;
 
-// Method selection - change this to try different approaches
-#define USE_PULSE_TIMING 1  // 1 = pulse timing method, 0 = frequency counting
-
-#if USE_PULSE_TIMING
-// Pulse timing method - measures time between pulses
-unsigned long lastDisplayTime = 0;
-const unsigned long displayInterval = 100; // Display every 100ms
-float currentRPM = 0;
+unsigned long lastMeasureTime = 0;
+const unsigned long interval = 100; // 100ms = 10 measurements per second
 
 // Rolling average for smoother readings
-const int numReadings = 5;
-float readings[numReadings];
-int readIndex = 0;
-float total = 0;
-float averageRPM = 0;
+const int numReadings = 10;  // Average over last 10 readings (1 second)
+int readings[numReadings];   // Array to store readings
+int readIndex = 0;           // Current position in array
+int total = 0;               // Running total
+int averageRPM = 0;          // Averaged RPM
 
-#else
-// Frequency counting method - shorter intervals
-unsigned long lastMeasureTime = 0;
-const unsigned long interval = 100; // 100ms intervals
-const int numReadings = 10;
-int readings[numReadings];
-int readIndex = 0;
-int total = 0;
-int averageRPM = 0;
-#endif
-
-// Edge detection variables
+// Variables for edge detection
 volatile bool lastState = HIGH;
 volatile unsigned long lastStateChangeTime = 0;
-const unsigned long minPulseWidth = 5;
+const unsigned long minPulseWidth = 5; // Reduced to 5ms for high RPM
 
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(115200); // Higher baud rate for more data
   pinMode(hallPin, INPUT);
   
-#if USE_PULSE_TIMING
-  // Initialize readings array
+  // Initialize all readings to 0
   for (int i = 0; i < numReadings; i++) {
     readings[i] = 0;
   }
-  Serial.println("High-Precision RPM Monitor - Pulse Timing Method");
-  Serial.println("Measures time between individual pulses for precision");
-#else
-  // Initialize readings array
-  for (int i = 0; i < numReadings; i++) {
-    readings[i] = 0;
-  }
-  Serial.println("High-Precision RPM Monitor - High Frequency Method");
-  Serial.println("100ms intervals with 10-sample rolling average");
-#endif
   
+  // Use CHANGE to detect both rising and falling edges
   attachInterrupt(digitalPinToInterrupt(hallPin), detectMagnet, CHANGE);
-  Serial.println("Ready...");
-  delay(1000);
+  
+  Serial.println("High-Frequency Hall Sensor RPM Monitor Started");
+  Serial.println("Measurement interval: 100ms | Rolling average: 10 samples");
+  Serial.println("Time(ms), Instant_RPM, Avg_RPM, Pulses");
 }
 
 void loop() {
-#if USE_PULSE_TIMING
-  // Pulse timing method - calculate RPM from time between pulses
   unsigned long now = millis();
-  
-  if (newPulseReceived && pulseInterval > 0) {
-    newPulseReceived = false;
-    
-    // Calculate RPM from pulse interval
-    // RPM = 60,000ms / interval_in_ms
-    currentRPM = 60000.0 / pulseInterval;
-    
-    // Update rolling average
-    total = total - readings[readIndex];
-    readings[readIndex] = currentRPM;
-    total = total + readings[readIndex];
-    readIndex = (readIndex + 1) % numReadings;
-    averageRPM = total / numReadings;
-  }
-  
-  // Display results every 100ms
-  if (now - lastDisplayTime >= displayInterval) {
-    Serial.print("RPM: ");
-    Serial.print(currentRPM, 1); // 1 decimal place
-    Serial.print(" | Avg: ");
-    Serial.print(averageRPM, 1);
-    Serial.print(" | Interval: ");
-    Serial.print(pulseInterval);
-    Serial.println("ms");
-    
-    lastDisplayTime = now;
-    
-    // Reset if no pulse for 2 seconds (stopped)
-    if (now - lastPulseTime > 2000) {
-      currentRPM = 0;
-      averageRPM = 0;
-      for (int i = 0; i < numReadings; i++) {
-        readings[i] = 0;
-      }
-      total = 0;
-    }
-  }
-  
-#else
-  // High frequency counting method
-  unsigned long now = millis();
-  
+
   if (now - lastMeasureTime >= interval) {
-    cli();
+    // Disable interrupts while reading volatile variable
+    noInterrupts();
     unsigned int currentPulseCount = pulseCount;
-    pulseCount = 0;
-    sei();
+    pulseCount = 0; // Reset counter for next interval
+    interrupts();
     
-    // Calculate RPM: pulses in 100ms * 10 = pulses/sec * 60 = RPM
+    // Calculate instantaneous RPM
+    // pulses in 100ms * 10 = pulses per second * 60 = pulses per minute
     unsigned int instantRPM = currentPulseCount * 600;
     
     // Update rolling average
-    total = total - readings[readIndex];
-    readings[readIndex] = instantRPM;
-    total = total + readings[readIndex];
-    readIndex = (readIndex + 1) % numReadings;
-    averageRPM = total / numReadings;
+    total = total - readings[readIndex];        // Remove oldest reading
+    readings[readIndex] = instantRPM;           // Add new reading
+    total = total + readings[readIndex];        // Add new reading to total
+    readIndex = (readIndex + 1) % numReadings;  // Move to next position
+    averageRPM = total / numReadings;           // Calculate average
     
-    Serial.print("RPM: ");
+    // Output data in CSV format for easy analysis
+    Serial.print(now);
+    Serial.print(", ");
     Serial.print(instantRPM);
-    Serial.print(" | Avg: ");
+    Serial.print(", ");
     Serial.print(averageRPM);
-    Serial.print(" | Pulses: ");
+    Serial.print(", ");
     Serial.println(currentPulseCount);
-    
+
     lastMeasureTime = now;
   }
-#endif
 }
 
 void detectMagnet() {
   unsigned long currentTime = millis();
   bool currentState = digitalRead(hallPin);
   
+  // Debounce: ignore changes that happen too quickly
   if (currentTime - lastStateChangeTime < minPulseWidth) {
     return;
   }
   
+  // Count a pulse when sensor goes from HIGH to LOW (magnet detected)
   if (lastState == HIGH && currentState == LOW) {
-#if USE_PULSE_TIMING
-    // Calculate interval between pulses
-    if (lastPulseTime > 0) {
-      pulseInterval = currentTime - lastPulseTime;
-      newPulseReceived = true;
-    }
-    lastPulseTime = currentTime;
-#else
     pulseCount++;
-#endif
   }
   
   lastState = currentState;
