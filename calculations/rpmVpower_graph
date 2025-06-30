@@ -1,48 +1,65 @@
 import matplotlib.pyplot as plt
+import pandas as pd
 import numpy as np
 
-# RPM data points from your dataset
+# Provided data
 rpm = np.array([60, 120, 180, 240, 300, 360, 420, 480, 540, 600, 660, 720, 840, 960, 1080, 1200])
+torque_ncm = np.array([285, 285, 285, 275, 240, 200, 170, 160, 135, 125, 120, 115, 95, 80, 65, 40])  # N·cm
 
-# Torque data in N.cm
-torque_ncm = np.array([285, 285, 285, 275, 240, 200, 170, 160, 135, 125, 120, 115, 95, 80, 65, 40])
-
-# Convert torque to N.m
+# Convert torque to N·m
 torque_nm = torque_ncm / 100
 
 # Calculate angular velocity (rad/s)
 omega = 2 * np.pi * rpm / 60
 
-# Mechanical power
+# Mechanical power (torque × angular velocity)
 power_mech = torque_nm * omega
 
 # Electrical power calculation
 Kb = 0.036  # V/(rad/s)
 R = 0.9     # Ohm
+
+# Calculate back EMF voltage
 V_emf = Kb * omega
-P_elec = (V_emf ** 2) / (4 * R)
+
+# Assume load resistance equals winding resistance for max power transfer
+R_load = R
+R_total = R + R_load
+
+# Calculate current through load
+I = V_emf / R_total
+
+# Electrical power delivered to load
+P_elec = I**2 * R_load
 
 # Iron loss model (empirical): P_iron = k * N^1.44
-k = 0.00001  # Adjusted constant for iron loss
+k = 0.00001  # Adjust as needed for your system
 P_iron = k * (rpm ** 1.44)
 
-# Net electrical output (delivered to load minus iron loss)
+# Net electrical power
 P_net = P_elec - P_iron
 P_net[P_net < 0] = 0  # Clamp negative values to zero
 
+# Create DataFrame
+data = {
+    'RPM': rpm,
+    'Mech Power': power_mech,
+    'Elec Power': P_elec,
+    'Net Power': P_net
+}
+df = pd.DataFrame(data)
+
+# Colors
+colors = ['#1FB8CD', '#FFC185', '#ECEBD5']
+
 # Plotting
 plt.figure(figsize=(10, 6))
-plt.plot(rpm, power_mech, 'orange', marker='o', label='Mechanical Power (W)')
-plt.plot(rpm, P_elec, 'blue', linestyle='--', marker='d', label='Ideal Electrical Power (W)')
-plt.plot(rpm, P_net, 'green', marker='s', label='Net Electrical Power (W)')
-
-# Highlight max net electrical power point
-max_net_idx = np.argmax(P_net)
-plt.plot(rpm[max_net_idx], P_net[max_net_idx], 'ro')
-
-plt.xlabel('Speed (RPM)')
-plt.ylabel('Power (Watts)')
-plt.title('Power Generation vs RPM for Stepper Motor')
-plt.grid(True)
+plt.plot(df['RPM'], df['Mech Power'], color=colors[0], label='Mech Power')
+plt.plot(df['RPM'], df['Elec Power'], color=colors[1], label='Elec Power')
+plt.plot(df['RPM'], df['Net Power'], color=colors[2], label='Net Power')
+plt.xlabel('RPM')
+plt.ylabel('Power')
+plt.title('Power vs RPM')
 plt.legend()
+plt.grid(True)
 plt.show()
