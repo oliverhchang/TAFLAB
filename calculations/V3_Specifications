@@ -1,0 +1,116 @@
+import numpy as np
+# Basic constants
+g = 9.81  # m/s^2
+rho_sand = 1905  # kg/m^3 (wet sand - should give good inertia)
+
+# Pendulum geometry - cylinder filled with sand
+r = 0.1016    # radius, 4" 
+l = 0.3048    # length, 12"
+d = 0.1524    # offset from rotation axis, 6"
+theta_deg = 35  # max swing angle
+theta_rad = np.radians(theta_deg)
+
+# Calculate pendulum properties
+volume_cyl = np.pi * r**2 * l
+mass = rho_sand * volume_cyl
+
+# Moment of inertia using parallel axis theorem
+I_cm = 0.5 * mass * r**2  # cylinder about its center
+I_pendulum = I_cm + mass * d**2  # about pivot point
+
+# Available torque at max swing angle
+torque_available = mass * g * d * np.sin(theta_rad)
+
+# Energy and max speed calculations
+PE_max = mass * g * d * (1 - np.cos(theta_rad))  # potential energy at max angle
+omega_max = np.sqrt(2 * PE_max / I_pendulum)      # max angular velocity
+rpm_max = omega_max * 60 / (2 * np.pi)
+
+print("=== Pendulum Analysis ===")
+print(f"Pendulum mass: {mass:.1f} kg")
+print(f"Moment of inertia: {I_pendulum:.4f} kg·m²")
+print(f"Static torque @ {theta_deg}°: {torque_available:.2f} Nm")
+print(f"Max swing speed: {rpm_max:.1f} RPM")
+print()
+
+# Motor/generator specs (NEMA 23 stepper as generator)
+ke = 0.057      # V/RPM back-EMF constant
+I_rotor = 6.8E-5 # kg·m² (typical NEMA 23)
+
+# Target charging parameters
+V_charge = 16.8  # 4S LiPo nominal
+I_charge = 2.0   # charging current
+eta = 0.85       # assumed efficiency
+
+# Calculate required motor performance
+P_elec = V_charge * I_charge
+P_mech = P_elec / eta  # mechanical power needed
+
+rpm_motor = V_charge / ke  # required motor RPM for target voltage
+omega_motor = 2 * np.pi * rpm_motor / 60
+torque_continuous = P_mech / omega_motor  # continuous load torque
+
+print("=== Generator Requirements ===")
+print(f"Electrical power: {P_elec:.1f} W")
+print(f"Mechanical power: {P_mech:.1f} W")
+print(f"Motor speed needed: {rpm_motor:.0f} RPM")
+print(f"Continuous load torque: {torque_continuous:.3f} Nm")
+print()
+
+# Gearing - match pendulum max speed to motor target speed
+ratio = rpm_motor / rpm_max
+
+# Flywheel sizing - store ~1 second of energy
+rho_aluminum = 2700  # kg/m³
+R_fly = 0.10  # 10cm radius seems reasonable
+E_target = P_mech * 1.0  # 1 second of energy storage
+
+I_flywheel_needed = (2 * E_target) / (omega_motor**2)
+mass_flywheel = 2 * I_flywheel_needed / R_fly**2
+thickness = mass_flywheel / (rho_aluminum * np.pi * R_fly**2)
+
+print("=== Mechanical Design ===")
+print(f"Gear ratio: {ratio:.1f}:1")
+print(f"Flywheel inertia needed: {I_flywheel_needed:.4f} kg·m²")
+print(f"Flywheel mass (R={R_fly*100:.0f}cm): {mass_flywheel:.1f} kg")
+print(f"Aluminum disk thickness: {thickness*1000:.1f} mm")
+print()
+
+# Startup analysis - can the pendulum overcome system inertia?
+print("=== Startup Torque Check ===")
+
+startup_time = 0.5  # target startup time in seconds
+
+# Total inertia reflected to pendulum shaft
+I_motor_side = I_flywheel_needed + I_rotor
+I_total_pendulum_side = I_pendulum + (I_motor_side / ratio**2)
+
+# Required acceleration
+alpha_motor_needed = omega_motor / startup_time
+alpha_pendulum_needed = alpha_motor_needed / ratio
+
+# Torque components
+torque_for_accel = I_total_pendulum_side * alpha_pendulum_needed
+torque_load_reflected = torque_continuous * ratio  # generator load seen by pendulum
+torque_total_needed = torque_for_accel + torque_load_reflected
+
+# Check if we have enough torque
+margin = torque_available - torque_total_needed
+
+print(f"System inertia (pendulum side): {I_total_pendulum_side:.4f} kg·m²")
+print(f"Acceleration torque needed: {torque_for_accel:.3f} Nm")
+print(f"Load torque (reflected): {torque_load_reflected:.3f} Nm")
+print(f"Total startup torque needed: {torque_total_needed:.3f} Nm")
+print(f"Available pendulum torque: {torque_available:.3f} Nm")
+print(f"Safety margin: {margin:.3f} Nm")
+
+if margin > 0:
+    print("✓ Should start successfully")
+else:
+    print("✗ Need more mass, longer arm, or steeper angle")
+    suggestions = []
+    if margin > -0.1:
+        suggestions.append("Try 40° swing angle")
+    if margin < -0.2:
+        suggestions.append("Consider heavier pendulum or longer moment arm")
+    print("Suggestions:", ", ".join(suggestions))
