@@ -12,54 +12,40 @@ torque_nm = torque_ncm / 100
 # Calculate angular velocity (rad/s)
 omega = 2 * np.pi * rpm / 60
 
-# Mechanical power (torque × angular velocity)
+# Mechanical power
 power_mech = torque_nm * omega
 
-# Electrical power calculation
-Kb = 0.036  # V/(rad/s)
-R = 0.9     # Ohm
+# Constants
+Kb = 0.714  # V/(rad/s)
+Kt = 0.714  # Nm/A (assumed equal to Kb)
+R = 0.9     # Ohms
 
-# Calculate back EMF voltage
-V_emf = Kb * omega
+# Calculate current based on torque
+I = torque_nm / Kt  # I = τ / Kt
 
-# Assume load resistance equals winding resistance for max power transfer
-R_load = R
-R_total = R + R_load
+# Terminal voltage = I * R + Back EMF
+V = I * R + Kb * omega
 
-# Calculate current through load
-I = V_emf / R_total
+# Electrical power input = V * I
+P_elec = V * I
 
-# Electrical power delivered to load
-P_elec = I**2 * R_load
-
-# Iron loss model (empirical): P_iron = k * N^1.44
-k = 0.00001  # Adjust as needed for your system
-P_iron = k * (rpm ** 1.44)
-
-# Net electrical power
-P_net = P_elec - P_iron
-P_net[P_net < 0] = 0  # Clamp negative values to zero
 
 # Create DataFrame
-data = {
+df = pd.DataFrame({
     'RPM': rpm,
     'Mech Power': power_mech,
     'Elec Power': P_elec,
-    'Net Power': P_net
-}
-df = pd.DataFrame(data)
-
-# Colors
-colors = ['#1FB8CD', '#FFC185', '#ECEBD5']
+})
 
 # Plotting
+colors = ['#1FB8CD', '#FFC185', '#ECEBD5']
 plt.figure(figsize=(10, 6))
-plt.plot(df['RPM'], df['Mech Power'], color=colors[0], label='Mech Power')
-plt.plot(df['RPM'], df['Elec Power'], color=colors[1], label='Elec Power')
-plt.plot(df['RPM'], df['Net Power'], color=colors[2], label='Net Power')
+plt.plot(df['RPM'], df['Mech Power'], label='Mech Power', color=colors[0])
+plt.plot(df['RPM'], df['Elec Power'], label='Elec Power', color=colors[1])
 plt.xlabel('RPM')
-plt.ylabel('Power')
-plt.title('Power vs RPM')
+plt.ylabel('Power (W)')
+plt.title('Power vs RPM (Torque-dependent Electrical Model)')
 plt.legend()
 plt.grid(True)
+plt.tight_layout()
 plt.show()
