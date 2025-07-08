@@ -1,0 +1,112 @@
+#include <Wire.h>
+#include <Adafruit_INA219.h>
+
+// === Power monitoring with INA219 ===
+Adafruit_INA219 ina219;
+
+// === RPM monitoring ===
+const int hallPin = 2;
+volatile unsigned long lastPulseTime = 0;
+volatile unsigned long pulseInterval = 0;
+volatile bool newPulseReceived = false;
+
+// RPM calculation variables
+float currentRPM = 0;
+const int numReadings = 5;
+float rpmReadings[numReadings];
+int readIndex = 0;
+float rpmTotal = 0;
+float averageRPM = 0;
+
+// Edge detection for Hall sensor
+volatile bool lastState = HIGH;
+volatile unsigned long lastStateChangeTime = 0;
+const unsigned long minPulseWidth = 5;
+
+// Timing for data logging
+unsigned long lastDataTime = 0;
+const unsigned long dataInterval = 500; // ms
+
+// === Setup ===
+void setup() {
+  Serial.begin(115200);
+  delay(1000); // wait for serial
+
+  // Initialize INA219
+  if (!ina219.begin()) {
+    Serial.println("Failed to find INA219 chip. Check wiring.");
+    while (1) delay(10);
+  }
+  Serial.println("INA219 sensor found!");
+
+  // Initialize RPM monitoring
+  pinMode(hallPin, INPUT);
+  attachInterrupt(digitalPinToInterrupt(hallPin), detectMagnet, CHANGE);
+
+  for (int i = 0; i < numReadings; i++) rpmReadings[i] = 0;
+
+  // Print header
+  Serial.println("Time(s)\tVoltage(V)\tCurrent(mA)\tPower(mW)\tRPM\tAvg_RPM");
+}
+
+// === Main Loop ===
+void loop() {
+  unsigned long now = millis();
+
+  // --- RPM Update ---
+  if (newPulseReceived && pulseInterval > 0) {
+    newPulseReceived = false;
+
+    currentRPM = 60000.0 / pulseInterval;
+
+    rpmTotal -= rpmReadings[readIndex];
+    rpmReadings[readIndex] = currentRPM;
+    rpmTotal += rpmReadings[readIndex];
+    readIndex = (readIndex + 1) % numReadings;
+    averageRPM = rpmTotal / numReadings;
+  }
+
+  // Reset if no pulse for 2 seconds
+  if (now - lastPulseTime > 2000) {
+    currentRPM = 0;
+    averageRPM = 0;
+    for (int i = 0; i < numReadings; i++) rpmReadings[i] = 0;
+    rpmTotal = 0;
+  }
+
+  // --- Data Logging ---
+  if (now - lastDataTime >= dataInterval) {
+    lastDataTime = now;
+    float t = now / 1000.0;
+
+    float busVoltage_V = ina219.getBusVoltage_V();
+    float current_mA = ina219.getCurrent_mA();
+    float power_mW = busVoltage_V * current_mA;
+
+    Serial.print(t, 2); Serial.print("\t");
+    Serial.print(busVoltage_V, 2); Serial.print("\t\t");
+    Serial.print(current_mA, 1); Serial.print("\t\t");
+    Serial.print(power_mW, 1); Serial.print("\t\t");
+    Serial.print(currentRPM, 0); Serial.print("\t");
+    Serial.println(averageRPM, 0);
+  }
+}
+
+// === Hall sensor interrupt ===
+void detectMagnet() {
+  unsigned long currentTime = millis();
+  bool currentState = digitalRead(hallPin);
+
+  if (currentTime - lastStateChangeTime < minPulseWidth) return;
+
+  if (lastState == HIGH && currentState == LOW) {
+    if (lastPulseTime > 0) {
+      pulseInterval = currentTime - lastPulseTime;
+      newPulseReceived = true;
+    }
+    lastPulseTime = currentTime;
+  }
+
+  lastState = currentState;
+  lastStateChangeTime = currentTime;
+}
