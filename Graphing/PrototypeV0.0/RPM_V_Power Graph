@@ -1,0 +1,51 @@
+import matplotlib.pyplot as plt
+import pandas as pd
+import numpy as np
+
+# Provided data
+rpm = np.array([60, 120, 180, 240, 300, 360, 420, 480, 540, 600, 660, 720, 840, 960, 1080, 1200])
+torque_ncm = np.array([285, 285, 285, 275, 240, 200, 170, 160, 135, 125, 120, 115, 95, 80, 65, 40])  # N·cm
+
+# Convert torque to N·m
+torque_nm = torque_ncm / 100
+
+# Calculate angular velocity (rad/s)
+omega = 2 * np.pi * rpm / 60
+
+# Mechanical power
+power_mech = torque_nm * omega
+
+# Constants
+Kb = 0.714  # V/(rad/s)
+Kt = 0.714  # Nm/A (assumed equal to Kb)
+R = 0.9     # Ohms
+
+# Calculate current based on torque
+I = torque_nm / Kt  # I = τ / Kt
+
+# Terminal voltage = I * R + Back EMF
+V = I * R + Kb * omega
+
+# Electrical power input = V * I
+P_elec = V * I
+
+
+# Create DataFrame
+df = pd.DataFrame({
+    'RPM': rpm,
+    'Mech Power': power_mech,
+    'Elec Power': P_elec,
+})
+
+# Plotting
+colors = ['#1FB8CD', '#FFC185', '#ECEBD5']
+plt.figure(figsize=(10, 6))
+plt.plot(df['RPM'], df['Mech Power'], label='Mech Power', color=colors[0])
+plt.plot(df['RPM'], df['Elec Power'], label='Elec Power', color=colors[1])
+plt.xlabel('RPM')
+plt.ylabel('Power (W)')
+plt.title('Power vs RPM (Torque-dependent Electrical Model)')
+plt.legend()
+plt.grid(True)
+plt.tight_layout()
+plt.show()
