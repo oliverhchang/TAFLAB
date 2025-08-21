@@ -65,7 +65,7 @@ if len(time_data) > 10:
 
     # Use 'distance' and 'prominence' to filter out noise without smoothing.
     # ADJUST THESE VALUES if peak detection is not accurate.
-    peak_indices, _ = find_peaks(angle_array, distance=5, prominence=1)
+    peak_indices, _ = find_peaks(angle_array, distance=1, prominence=0.5)
 
     if len(peak_indices) < 2:
         print("\n--- Starting Damping Analysis ---")
