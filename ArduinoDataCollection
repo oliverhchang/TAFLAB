@@ -1,0 +1,193 @@
+/*
+  ESP32 Dual Sensor (INA219 & HWT901B IMU) Logger with Onboard Storage
+
+  Purpose:
+  This sketch simultaneously reads from an INA219 power monitor (I2C) and an
+  HWT901B-TTL IMU (Serial/UART). It combines the data, saves it to a CSV file on
+  the ESP32's flash memory, and sends it for live monitoring. This version
+  parses the IMU data manually and DOES NOT require any external IMU libraries.
+
+  Serial Commands (to the main USB Serial Monitor):
+  - start: Resumes data collection.
+  - stop:  Pauses data collection.
+  - dump:  Prints the entire contents of the CSV file.
+  - erase: Deletes the data file and creates a new one.
+
+  Required Libraries:
+  - Adafruit INA219 (Install via Arduino IDE's Library Manager)
+
+  Wiring:
+  **INA219 Sensor (I2C)**
+  - VCC -> 5V, GND -> GND, SDA -> GPIO8, SCL -> GPIO9
+
+  **HWT901B-TTL IMU (UART)**
+  - VCC -> 5V, GND -> GND, TX -> GPIO42 (ESP32's RX2), RX -> GPIO41 (ESP32's TX2)
+*/
+
+#include <Wire.h>
+#include <Adafruit_INA219.h>
+#include "SPIFFS.h"
+
+// --- INA219 Sensor Setup ---
+Adafruit_INA219 ina219;
+#define I2C_SDA 8
+#define I2C_SCL 9
+
+// --- IMU Data Storage ---
+float imu_accel[3] = {0.0, 0.0, 0.0}; // x, y, z
+float imu_angle[3] = {0.0, 0.0, 0.0}; // roll, pitch, yaw
+
+// Global flag to control the logging state
+bool isLoggingEnabled = true;
+
+// CSV Header for the combined data
+const char* csvHeader = "Timestamp_ms,Voltage_V,Current_mA,Power_mW,AccX_g,AccY_g,AccZ_g,Roll_deg,Pitch_deg,Yaw_deg";
+
+// --- Function to parse IMU data packets ---
+void updateIMU() {
+  static byte buffer[11];
+  static byte state = 0;
+ 
+  while (Serial2.available()) {
+    byte incomingByte = Serial2.read();
+    switch (state) {
+      case 0: // Looking for start byte 0x55
+        if (incomingByte == 0x55) {
+          buffer[0] = incomingByte;
+          state = 1;
+        }
+        break;
+      case 1: // Looking for packet type
+        buffer[1] = incomingByte;
+        if (buffer[1] == 0x51 || buffer[1] == 0x53) { // 0x51=Accel, 0x53=Angle
+          state = 2;
+        } else {
+          state = 0; // Not a packet we care about, reset
+        }
+        break;
+      case 2: case 3: case 4: case 5: case 6: case 7: case 8: case 9: // Read data bytes
+        buffer[state] = incomingByte;
+        state++;
+        break;
+      case 10: // Read checksum and process packet
+        buffer[10] = incomingByte;
+        byte checksum = 0;
+        for (int i = 0; i < 10; i++) {
+          checksum += buffer[i];
+        }
+       
+        if (checksum == buffer[10]) { // Checksum is valid
+          if (buffer[1] == 0x51) { // Acceleration Packet
+            short ax = (short)(buffer[3] << 8 | buffer[2]);
+            short ay = (short)(buffer[5] << 8 | buffer[4]);
+            short az = (short)(buffer[7] << 8 | buffer[6]);
+            imu_accel[0] = ax / 32768.0 * 16.0; // Convert to g
+            imu_accel[1] = ay / 32768.0 * 16.0;
+            imu_accel[2] = az / 32768.0 * 16.0;
+          } else if (buffer[1] == 0x53) { // Angle Packet
+            short roll = (short)(buffer[3] << 8 | buffer[2]);
+            short pitch = (short)(buffer[5] << 8 | buffer[4]);
+            short yaw = (short)(buffer[7] << 8 | buffer[6]);
+            imu_angle[0] = roll / 32768.0 * 180.0; // Convert to degrees
+            imu_angle[1] = pitch / 32768.0 * 180.0;
+            imu_angle[2] = yaw / 32768.0 * 180.0;
+          }
+        }
+        state = 0; // Reset for next packet
+        break;
+    }
+  }
+}
+
+void setup() {
+  Serial.begin(115200);
+  unsigned long startTime = millis();
+  while (!Serial && millis() - startTime < 4000);
+
+  Wire.begin(I2C_SDA, I2C_SCL);
+  Serial.println("Initializing INA219 sensor...");
+  if (!ina219.begin()) {
+    Serial.println("Failed to find INA219 chip. Check wiring.");
+    while (1) { delay(10); }
+  }
+  Serial.println("INA219 sensor found.");
+
+  // Start the second serial port for the IMU
+  Serial2.begin(9600, SERIAL_8N1, 42, 41); // RX, TX pins
+  Serial.println("Initializing HWT901B IMU...");
+
+  Serial.println("Mounting file system...");
+  if(!SPIFFS.begin(true)){
+    Serial.println("An Error has occurred while mounting SPIFFS");
+    return;
+  }
+ 
+  File file = SPIFFS.open("/sensor_data.csv", FILE_APPEND);
+  if(!file){
+      Serial.println("Error opening file for appending");
+      return;
+  }
+  if(file.size() == 0){
+    file.println(csvHeader);
+  }
+  file.close();
+ 
+  Serial.println("\nSetup complete. Logging is active.");
+  Serial.println("Commands: start, stop, dump, erase");
+}
+
+void loop() {
+  // Update IMU data by processing any incoming serial bytes
+  updateIMU();
+
+  if (isLoggingEnabled) {
+    float busVoltage = ina219.getBusVoltage_V();
+    float current_mA = ina219.getCurrent_mA();
+    float power_mW = ina219.getPower_mW();
+    unsigned long timestamp_ms = millis();
+
+    char dataString[200];
+    snprintf(dataString, 200, "%lu,%.2f,%.2f,%.2f,%.3f,%.3f,%.3f,%.2f,%.2f,%.2f",
+             timestamp_ms, busVoltage, current_mA, power_mW,
+             imu_accel[0], imu_accel[1], imu_accel[2],
+             imu_angle[0], imu_angle[1], imu_angle[2]);
+
+    Serial.println(dataString);
+
+    File file = SPIFFS.open("/sensor_data.csv", FILE_APPEND);
+    if(file){
+      file.println(dataString);
+      file.close();
+    }
+  }
+
+  if (Serial.available() > 0) {
+    String cmd = Serial.readStringUntil('\n');
+    cmd.trim();
+
+    if (cmd == "dump") {
+      isLoggingEnabled = false;
+      Serial.println("\n--- Dumping data from SPIFFS ---");
+      File dataFile = SPIFFS.open("/sensor_data.csv", FILE_READ);
+      if (dataFile) { while(dataFile.available()){ Serial.write(dataFile.read()); } dataFile.close(); }
+      Serial.println("--- End of data dump ---\n");
+      isLoggingEnabled = true;
+    }
+    else if (cmd == "stop") { isLoggingEnabled = false; Serial.println("\n>>> Logging PAUSED. <<<\n"); }
+    else if (cmd == "start") { isLoggingEnabled = true; Serial.println("\n>>> Logging RESUMED. <<<\n"); }
+    else if (cmd == "erase") {
+      isLoggingEnabled = false;
+      Serial.println("\n--- ERASING DATA FILE ---");
+      if(SPIFFS.remove("/sensor_data.csv")){
+        Serial.println("File erased.");
+        File file = SPIFFS.open("/sensor_data.csv", FILE_WRITE);
+        if (file) { file.println(csvHeader); file.close(); Serial.println("New data file created."); }
+      } else { Serial.println("Error erasing file."); }
+      Serial.println(">>> Logging is PAUSED. Type 'start' to begin new session. <<<\n");
+    }
+  }
+
+  delay(100);
+}
+
+
