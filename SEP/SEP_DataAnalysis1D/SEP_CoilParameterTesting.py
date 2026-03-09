@@ -11,7 +11,7 @@ import shutil  # <--- Added for saving files
 
 # ================= CONFIGURATION =================
 LIVE_FILENAME = 'SEP_CoilParameterTesting_LiveData.csv'  # Temporary buffer (always overwritten)
-LOG_FILENAME = 'Experiment_Log.csv'  # Master summary file
+LOG_FILENAME = 1  # Master summary file
 
 # Physics Constants
 PENDULUM_LENGTH = 0.2  # Meters
