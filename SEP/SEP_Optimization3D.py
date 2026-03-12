@@ -14,7 +14,7 @@ def optimize_coil_geometry():
     results = []
     valid_radii = []
 
-    print(f"Starting optimization sweep over {len(test_radii)} geometries...")
+    print(f"Starting Optimization sweep over {len(test_radii)} geometries...")
     print("-" * 50)
     print(f"{'Radius (mm)':<15} | {'Status':<15} | {'Power Score':<15}")
     print("-" * 50)
@@ -35,7 +35,7 @@ def optimize_coil_geometry():
         coil_diameter = (2 * r) + 0.001
 
         # ------------------------------------------
-        # B. Physics Simulation (The "Power")
+        # B. physics Simulation (The "Power")
         # ------------------------------------------
         sim = SphericalPendulum3D()
 

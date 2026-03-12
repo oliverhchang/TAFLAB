@@ -85,7 +85,7 @@ def run_sim(N_turns, ID, OD, H_coil, AWG_val):
                             for z in z_act])
             flux_data += phi * turns_per_cell
 
-    # ---- Analysis ----
+    # ---- analysis ----
     def model(x, a, b, c):
         # Safety: Ensure term inside sqrt is non-negative
         val = b * x ** 2 + c
@@ -157,7 +157,7 @@ def _awg_for_turns(n):
 # ============================================================
 # 3. RUNNING 1D EXPERIMENTS
 # ============================================================
-print("Running 1D optimization sweeps...")
+print("Running 1D Optimization sweeps...")
 
 # A - Turns Sweep
 n_range = np.linspace(100, 2500, 25)

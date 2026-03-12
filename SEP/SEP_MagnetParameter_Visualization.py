@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-# --- Physics Formulas ---
+# --- physics Formulas ---
 def b_field_cylinder(z, D, H, Br=1.26):
     """Calculate on-axis B-field of a cylinder at distance z."""
     R = D / 2.0

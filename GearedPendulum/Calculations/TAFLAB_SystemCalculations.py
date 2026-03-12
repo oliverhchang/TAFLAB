@@ -190,7 +190,7 @@ class WECSimulator:
 
 
 # =========================================================================
-#  CLASS 3: WEC Analysis and Optimization Suite
+#  CLASS 3: WEC analysis and Optimization Suite
 # =========================================================================
 class WECAnalysisSuite:
     """
@@ -306,7 +306,7 @@ class WECAnalysisSuite:
         ax.plot(t, phi, label=r'Boat Roll ($\phi$)', color='k', linestyle='--')
         ax.plot(t, th1, label=r'Keel Angle rel. to Boat ($\theta_1$)')
         ax.plot(t, th2, label=r'Pendulum Angle rel. to Keel ($\theta_2$)')
-        ax.set_title('Angle Time Series (Phase Analysis)')
+        ax.set_title('Angle Time Series (Phase analysis)')
         ax.set_ylabel('Angle (degrees)')
         ax.set_xlabel('Time (s)')
         ax.grid(True)

@@ -76,7 +76,7 @@ margin = torque_available - torque_total_needed
 
 # === Print Results ===
 print("--- CALCULATIONS FOR NOMINAL R_load = 10.0 Ohms ---")
-print("=== Pendulum Analysis ===")
+print("=== Pendulum analysis ===")
 print(f"Pendulum mass: {mass:.1f} kg")
 print(f"Moment of inertia: {I_pendulum:.4f} kg·m²")
 print(f"Static torque @ {theta_deg}°: {torque_available:.2f} Nm")

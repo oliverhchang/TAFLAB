@@ -13,13 +13,13 @@ import shutil  # <--- Added for saving files
 LIVE_FILENAME = 'SEP_CoilParameterTesting_LiveData.csv'  # Temporary buffer (always overwritten)
 LOG_FILENAME = 1  # Master summary file
 
-# Physics Constants
+# physics Constants
 PENDULUM_LENGTH = 0.2  # Meters
 PENDULUM_MASS = 0.16  # Kilograms
 STARTING_ANGLE = 90  # Degrees
 GRAVITY = 9.81  # m/s^2
 
-# Analysis Thresholds
+# analysis Thresholds
 POWER_THRESHOLD = 0.5  # mW
 MIN_SWING_LENGTH = 5  # Samples
 

@@ -16,7 +16,7 @@ Mass_Magnets = 36 * 0.168  # 6.048 kg
 Mass_Shell = 1.50  # 1.5 kg Structure
 M_pendulum = Mass_Magnets + Mass_Shell  # 7.55 kg
 
-# -- Physics Approximations --
+# -- physics Approximations --
 L_pendulum = R_pendulum / 2  # CoM of shell
 J_pendulum = (2 / 3) * M_pendulum * (R_pendulum ** 2)  # Inertia
 

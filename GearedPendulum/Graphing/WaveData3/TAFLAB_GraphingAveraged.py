@@ -39,7 +39,7 @@ def parse_trial(filepath):
     df = pd.DataFrame(rows, columns=["Time", "Voltage", "Current", "Power"])
     return df
 
-# === Swing Analysis ===
+# === Swing analysis ===
 def average_power_per_swing(df):
     peaks, _ = find_peaks(df["Power"], height=1)
     swings = []

@@ -77,7 +77,7 @@ finally:
         ser.close()
         print("Serial port closed.")
 
-# --- 5. Data Analysis & Damping Calculation ---
+# --- 5. Data analysis & Damping Calculation ---
 if len(time_data) > 10:
     time_array = np.array(time_data)
     angle_array = np.array(angle_data)
@@ -87,7 +87,7 @@ if len(time_data) > 10:
     peak_indices, _ = find_peaks(angle_array, distance=1, prominence=0.5)
 
     if len(peak_indices) < 2:
-        print("\n--- Starting Damping Analysis ---")
+        print("\n--- Starting Damping analysis ---")
         print("Error: Could not find at least two peaks.")
         print("TRY THIS: Decrease the 'distance' and 'prominence' values in the find_peaks() function.")
         # Plot the data anyway for visual inspection
@@ -113,7 +113,7 @@ if len(time_data) > 10:
         damping_coefficient = zeta * c_critical
 
         # --- 6. Print Results (Formatted as requested) ---
-        print("\n--- Analysis Results ---")
+        print("\n--- analysis Results ---")
         print(f"Logarithmic Decrement (δ): {delta:.4f}")
         print(f"Damping Ratio (ζ): {zeta:.4f}")
         print(f"Avg. Damped Period (τd): {avg_damped_period:.4f} s")
@@ -134,7 +134,7 @@ if len(time_data) > 10:
         plt.figure(figsize=(12, 6))
         plt.plot(time_array, angle_array, 'b-', linewidth=1, label='Experimental Data')
         plt.plot(peak_times, peak_angles, 'ro', label='Detected Peaks')
-        plt.title(f"Pendulum Angle vs. Time (Damping Analysis)")
+        plt.title(f"Pendulum Angle vs. Time (Damping analysis)")
         plt.xlabel("Time (s)")
         plt.ylabel("Angle (degrees)")
         plt.grid(True, which='both', linestyle='--', linewidth=0.5)

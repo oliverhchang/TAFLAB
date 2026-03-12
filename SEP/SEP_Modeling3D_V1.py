@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 # ==========================================
 # 1. CONSTANTS & PARAMETERS
 # ==========================================
-# Physics
+# physics
 MU_0 = 4 * np.pi * 1e-7
 g = 9.81
 
@@ -130,7 +130,7 @@ def simulate_circuit(t_array, flux_array):
     dPhi_dt = np.gradient(flux_array, dt)
     v_open_circuit = -N_turns * dPhi_dt
 
-    # B. Full-Bridge Rectifier + Voltage Divider (The "Real Physics" Update)
+    # B. Full-Bridge Rectifier + Voltage Divider (The "Real physics" Update)
     # 1. Diode Loss: The source must overcome the diode drop first
     v_source_rect = np.abs(v_open_circuit) - (2 * Diode_Drop)
     v_source_rect = np.maximum(v_source_rect, 0)  # Clip negative values

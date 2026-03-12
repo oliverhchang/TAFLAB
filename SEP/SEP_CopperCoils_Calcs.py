@@ -7,7 +7,7 @@ R_mag = 0.020
 D_mag = 0.020
 Gap = 0.007
 
-# Pendulum Physics
+# Pendulum physics
 L_pend = 0.2  # Length (m)
 Theta_0 = 45.0  # Swing Amplitude (degrees)
 g = 9.81
