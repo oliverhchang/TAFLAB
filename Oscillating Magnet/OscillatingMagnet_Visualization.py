@@ -1,24 +1,3 @@
-"""
-WECVisualizer  –  v3
-────────────────────
-Changes over v2:
-  1. DOWNWARD MOTION  – the sled now moves DOWN (decreasing y) and to the
-     left in the kinematic view, matching physical reality (gravity along
-     the slope pulls the mass from top-right → bottom-left).
-     The tilt axis is flipped: track runs from upper-right to lower-left;
-     the "along" unit vector points down-slope (toward lower-left).
-
-  2. HIGH-FIDELITY FIELD LINES  – the in-plane (Bx, Bz) overlay is replaced
-     by a streamplot drawn on a much finer grid (120 × 80 by default) with
-     linewidth and color mapped to field strength.  The Bz colour-map is also
-     computed on the same fine grid.  Field-map refresh every 4 frames.
-
-  3. MOV OUTPUT  – `viz.run(save_path="…/output.mov")` renders every frame
-     to a PNG buffer and stitches them with ffmpeg into a QuickTime-compatible
-     H.264 .mov.  Pillow is NOT used; this removes the 256-colour GIF
-     limitation.  A progress bar is printed to stdout.
-"""
-
 import io
 import os
 import subprocess
